@@ -22,11 +22,11 @@ type Listener struct {
 	eventDecoder *EventDecoder
 	config       *Config
 	conn         *Connection
-	messages     chan<- chain.Message
+	messages     chan<- []chain.Message
 	log          *logrus.Entry
 }
 
-func NewListener(config *Config, conn *Connection, messages chan<- chain.Message, log *logrus.Entry) *Listener {
+func NewListener(config *Config, conn *Connection, messages chan<- []chain.Message, log *logrus.Entry) *Listener {
 	return &Listener{
 		eventDecoder: NewEventDecoder(&conn.metadata),
 		config:       config,
@@ -149,6 +149,7 @@ func sleep(ctx context.Context, delay time.Duration) {
 
 // Process transfer events in the block
 func (li *Listener) handleEvents(blockNumber uint64, events []Event) {
+	messages := make([]chain.Message, 0)
 
 	for i, event := range events {
 
@@ -168,8 +169,7 @@ func (li *Listener) handleEvents(blockNumber uint64, events []Event) {
 			encoder.Encode(uint64(i))
 
 			targetAppID := li.config.Targets["eth"]
-
-			li.messages <- chain.Message{AppID: targetAppID, Payload: buf.Bytes()}
+			messages = append(messages, chain.Message{AppID: targetAppID, Payload: buf.Bytes()})
 		case ERC20Transfer:
 			buf := bytes.NewBuffer(nil)
 			encoder := scale.NewEncoder(buf)
@@ -181,8 +181,9 @@ func (li *Listener) handleEvents(blockNumber uint64, events []Event) {
 			encoder.Encode(uint64(i))
 
 			targetAppID := li.config.Targets["erc20"]
-
-			li.messages <- chain.Message{AppID: targetAppID, Payload: buf.Bytes()}
+			messages = append(messages, chain.Message{AppID: targetAppID, Payload: buf.Bytes()})
 		}
 	}
+
+	li.messages <- messages
 }
